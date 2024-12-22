@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.5.23", features = ["derive"] }
+glob = "0.3.1"
+lscolors = {version = "0.20.0", features = ["crossterm"]}
+wild = "2.2.1"
+nu-ansi-term = "0.50.1"
