@@ -1,19 +1,10 @@
+mod trm;
+
+use trm::*;
 use std::path::PathBuf;
 use clap::Parser;
 use glob::glob;
 use lscolors::LsColors;
-
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about=None)]
-struct Args{
-    /// Files to delete
-    files: Vec<String>,
-
-    #[arg(short, long, default_value_t = false)]
-    display: bool
-
-}
 
 
 
@@ -23,8 +14,14 @@ fn main() {
 
     let mut files: Vec<PathBuf> = Vec::new();
     
-    for file in args.files{
+    if args.debug{
+        println!("Number of args received: {}", args.files.len());
+    }
+
+    for file in &args.files{
         let escaped_file = glob::Pattern::escape(&file);
+        
+
         for entry in match glob(&escaped_file) {
             Ok(paths) => paths,
             Err(e) => {
@@ -33,14 +30,14 @@ fn main() {
             }
         } {
             match entry {
-                Ok(path) => files.push(path),
+                Ok(path) => { files.push(path); }
                 Err(e) => println!("{:?}", e)
             }
         }
     }
 
-    if args.display {
-        for file in files {
+    if args.verbose {
+        for file in &files {
             if let Some(style) = lscolors.style_for_path(&file){
                 let crossterm_style = style.to_crossterm_style();
                 println!("{}", crossterm_style.apply(file.display().to_string()));
@@ -49,5 +46,22 @@ fn main() {
             }
         }
     }
+
+    match setup_logging(){
+        Ok(_) => {},
+        Err(e) => {
+            eprintln!("Could not setup logging: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+
+    let dir_path = match setup_directory(&args){
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("Could not create directory: {}", e);
+            std::process::exit(1);
+        }
+    };
 
 }
