@@ -1,8 +1,10 @@
+use std::fs;
 use std::{io::Error, path::PathBuf};
+use chrono::{DateTime, Local};
 use clap::Parser;
 
 #[cfg(target_os = "linux")]
-pub static DEFAULT_DIR: &str = "/tmp/trm_files";
+pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
 #[cfg(target_os = "linux")]
 pub static LOG_DIR: &str = "/var/log/trm";
 
@@ -12,7 +14,7 @@ pub static DEFAULT_DIR: &str = "C:\\Temp\\trm_files";
 pub static LOG_DIR: &str = "C:\\ProgramData\\trm\\log";
 
 #[cfg(target_os = "macos")]
-pub static DEFAULT_DIR: &str = "/tmp/trm_files";
+pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
 #[cfg(target_os = "macos")]
 pub static LOG_DIR: &str = "/var/log/trm";
 
@@ -36,6 +38,15 @@ pub struct Args{
     #[arg(short, long, default_value_t = DEFAULT_DIR.to_string())]
     pub dir: String
 }
+
+struct _FileInfo{
+    /// The original path from where the path was copied
+    path: String,
+
+    /// The datetime when it was moved
+    moved_time: DateTime<Local>
+}
+
 
 pub fn setup_logging() -> Result<bool, Error>{
     if let Err(e) = std::fs::create_dir_all(LOG_DIR){
@@ -86,7 +97,7 @@ pub fn setup_directory(args:&Args) -> Result<PathBuf, Error>{
     let dir_path = match PathBuf::from(&dir).canonicalize(){
         Ok(dir) => dir,
         Err(_) => {
-            if let Err(e) = std::fs::create_dir_all(&dir){
+            if let Err(e) = fs::create_dir_all(&dir){
                 eprintln!("Failed to create directory {}: {}", dir, e);
                 return Err(e);
             }
@@ -101,7 +112,41 @@ pub fn setup_directory(args:&Args) -> Result<PathBuf, Error>{
     Ok(dir_path)
 }
 
-// fn move_files(dir_path: &PathBuf, files: &Vec<PathBuf>){
+/// This does the following
+/// 
+/// 1. Create a info file, which stores the name and time at which it was moved here
+/// 2. Move the file
+pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>){
+    for file in files{
+        let full_path = match file.canonicalize() {
+            Ok(path) => path,
+            Err(e) => {
+                eprintln!("Failed to canonicalize path {}: {}", file.display(), e);
+                return;
+            }
+        };
 
-// }
+        let new_location = dir_path.join(full_path.strip_prefix("/").unwrap());
 
+        if args.debug{
+            println!("New location: {}", new_location.display());
+        }
+
+        // ensuring parent directories exist
+        if let Some(parent) = new_location.parent(){
+            if let Err(e) = fs::create_dir_all(parent){
+                eprintln!("Failed to create directory {}: {}", parent.display(), e);
+                return;
+            }
+        }
+        
+
+        match fs::rename(&full_path, &new_location) {
+            Ok(_) => (),
+            Err(e) => {
+                eprintln!("Failed to move files from {} to {}: {}", full_path.display(), new_location.display(), e);
+                return;
+            }
+        }
+    } 
+}
