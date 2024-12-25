@@ -126,26 +126,63 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>){
             }
         };
 
-        let new_location = dir_path.join(full_path.strip_prefix("/").unwrap());
-
-        if args.debug{
-            println!("New location: {}", new_location.display());
-        }
+        let mut new_location = dir_path.join(full_path.strip_prefix("/").unwrap());
 
         // ensuring parent directories exist
-        if let Some(parent) = new_location.parent(){
+        if let Some(parent) = new_location.clone().parent(){
+
+            // if name conflict exists, find the version number in a 2 step process
+            // 1. Binary exponentiation to find upper limit
+            // 2. Binary search to find actual number
+
+            if parent.exists(){
+                let mut search_start = 1;
+                let mut search_end = 1;
+                let file_name = file.file_name().unwrap().to_str().unwrap().to_string();
+                while parent.join(format!("{}_{}", file_name, &search_end.to_string())).exists(){
+                    search_start = search_end;
+                    search_end *= 2;
+                }
+                
+
+                // Binary search 
+                while search_start < search_end{
+                    let middle = (search_start + search_end) / 2;
+                    let curr_file_name = parent.join(format!("{}_{}", file_name, &middle.to_string()));
+                    
+                    if curr_file_name.exists(){
+                        search_start = middle+1;
+                    } else {
+                        search_end = middle;
+                    }
+                    
+                }
+
+                let new_file_name = format!("{}_{}", file_name, search_end);
+                new_location.set_file_name(&new_file_name);
+
+                if args.debug{
+                    println!("New file name: {}", new_file_name);
+                    println!("New file location: {}", new_location.display());
+                }
+            }
+
             if let Err(e) = fs::create_dir_all(parent){
                 eprintln!("Failed to create directory {}: {}", parent.display(), e);
-                return;
+                std::process::exit(1);
             }
         }
-        
+
+        if args.debug{
+            println!("New file location: {}", new_location.display());
+        }
+
 
         match fs::rename(&full_path, &new_location) {
             Ok(_) => (),
             Err(e) => {
                 eprintln!("Failed to move files from {} to {}: {}", full_path.display(), new_location.display(), e);
-                return;
+                std::process::exit(1);
             }
         }
     } 
