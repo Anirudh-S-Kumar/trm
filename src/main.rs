@@ -3,13 +3,11 @@ mod trm;
 use trm::*;
 use std::path::PathBuf;
 use clap::Parser;
-use lscolors::LsColors;
 
 
 
 fn main() {
-    let args = Args::parse_from(wild::args());
-    let lscolors = LsColors::from_env().unwrap_or_default();
+    let args = Args::parse();
 
     let mut files: Vec<PathBuf> = vec![];
     
@@ -21,16 +19,7 @@ fn main() {
         files.push(PathBuf::from(file));
     }
 
-    if args.verbose {
-        for file in &files {
-            if let Some(style) = lscolors.style_for_path(&file){
-                let crossterm_style = style.to_crossterm_style();
-                println!("{}", crossterm_style.apply(file.display().to_string()));
-            } else{
-                println!("{}", file.display().to_string());
-            }
-        }
-    }
+    
 
     match setup_logging(){
         Ok(_) => {},
@@ -49,7 +38,15 @@ fn main() {
         }
     };
 
+    if args.verbose{
+        display_files(&files, false);
+    }
 
-    move_files(&args, &dir_path, &files);
+    if args.list{
+        list_delete_files(&args, &dir_path, &mut files);
+    } else{
+        move_files(&args, &dir_path, &files);
+    }
+
 
 }

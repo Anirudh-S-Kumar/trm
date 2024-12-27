@@ -1,29 +1,21 @@
 use std::fs;
-use std::{io::Error, path::PathBuf};
+use std::{io::{self, Error}, path::PathBuf};
 use chrono::{DateTime, Local};
 use clap::Parser;
+use lscolors::LsColors;
+use term_grid::{Grid, GridOptions};
 
-#[cfg(target_os = "linux")]
 pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
-#[cfg(target_os = "linux")]
-pub static LOG_DIR: &str = "/var/log/trm";
+    pub static LOG_DIR: &str = "/var/log/trm";
 
-#[cfg(target_os = "windows")]
-pub static DEFAULT_DIR: &str = "C:\\Temp\\trm_files";
-#[cfg(target_os = "windows")]
-pub static LOG_DIR: &str = "C:\\ProgramData\\trm\\log";
-
-#[cfg(target_os = "macos")]
-pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
-#[cfg(target_os = "macos")]
-pub static LOG_DIR: &str = "/var/log/trm";
 
 #[derive(Parser, Debug, Default)]
 #[command(version, about = "trm - Temporary rm, a utility to reversibly remove your files", long_about=None)]
 #[command(arg_required_else_help(true))]
 pub struct Args{
-    /// Files to delete
-    #[arg(required = true, num_args = 1..)]
+    /// Files to delete    
+    // #[arg(required_unless_present = "undo", required_unless_present="history", num_args = 0..)]
+    #[arg(required_unless_present="list", num_args = 0..)]
     pub files: Vec<String>,
 
     /// Display full file paths or not
@@ -33,6 +25,10 @@ pub struct Args{
     /// Debug output
     #[arg(long)]
     pub debug: bool,
+
+    /// Display all files trashed under current directory
+    #[arg(short, long)]
+    pub list: bool,
 
     /// Directory where to move
     #[arg(short, long, default_value_t = DEFAULT_DIR.to_string())]
@@ -45,6 +41,46 @@ struct _FileInfo{
 
     /// The datetime when it was moved
     moved_time: DateTime<Local>
+}
+
+macro_rules! get_file_name {
+    ($path:expr) => {
+        $path.file_name().unwrap().to_str().unwrap().to_string()
+    };
+}
+
+pub fn display_files(files: &Vec<PathBuf>, only_filename: bool){
+    let lscolors = LsColors::from_env().unwrap_or_default();
+    let stdout_width = terminal_size::terminal_size_of(io::stdout())
+                                                            .map(|(w, _h)| w.0 as _)
+                                                            .unwrap_or(80);
+
+    let file_names : Vec<String> = files.iter().map(|file|{
+        if let Some(style) = lscolors.style_for_path(&file){
+            let crossterm_style = style.to_crossterm_style();
+            if only_filename{
+                return crossterm_style.apply(get_file_name!(file)).to_string();
+            }
+            crossterm_style.apply(file.display().to_string()).to_string()
+        } else{
+            if only_filename{
+                return get_file_name!(file);
+            }
+            file.display().to_string()
+        }
+    }).collect();
+
+
+    let grid = Grid::new(
+        file_names, 
+        GridOptions {
+            filling: term_grid::Filling::Spaces(2),
+            direction: term_grid::Direction::TopToBottom,
+            width: stdout_width
+        }
+    );
+
+    println!("{grid}");
 }
 
 
@@ -68,23 +104,10 @@ pub fn setup_directory(args:&Args) -> Result<PathBuf, Error>{
     let dir: String;
     let mut var_dir: String = String::new(); 
 
-    #[cfg(target_os = "linux")]
     match std::env::var("XDG_DATA_HOME") {
         Ok(default_dir) => { var_dir = default_dir; }
         Err(_) => {}
     }
-
-    // #[cfg(target_os = "windows")]
-    // match std::env::var("APPDATA") {
-    //     Ok(default_dir) => { var_dir = default_dir; }
-    //     Err(_) => {}
-    // }
-
-    // #[cfg(target_os = "macos")]
-    // match std::env::var("HOME") {
-    //     Ok(home_dir) => { var_dir = format!("{}/Library/Application Support", home_dir); }
-    //     Err(_) => {}
-    // }
 
     if args.dir != DEFAULT_DIR {
         dir = args.dir.clone();
@@ -112,10 +135,13 @@ pub fn setup_directory(args:&Args) -> Result<PathBuf, Error>{
     Ok(dir_path)
 }
 
+
+
 /// This does the following
 /// 
 /// 1. Create a info file, which stores the name and time at which it was moved here
 /// 2. Move the file
+/// TODO: Refactor the logic for finding new file path and transfer the move logic back to the main file
 pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>){
     for file in files{
         let full_path = match file.canonicalize() {
@@ -134,11 +160,10 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>){
             // if name conflict exists, find the version number in a 2 step process
             // 1. Binary exponentiation to find upper limit
             // 2. Binary search to find actual number
-
             if parent.exists(){
                 let mut search_start = 1;
                 let mut search_end = 1;
-                let file_name = file.file_name().unwrap().to_str().unwrap().to_string();
+                let file_name = get_file_name!(file);
                 while parent.join(format!("{}_{}", file_name, &search_end.to_string())).exists(){
                     search_start = search_end;
                     search_end *= 2;
@@ -186,4 +211,42 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>){
             }
         }
     } 
+}
+
+pub fn list_delete_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>){
+    let cwd = std::env::current_dir().unwrap();
+    if files.is_empty(){
+        files.push(cwd.clone());
+    }
+
+    for file in files.iter_mut() {
+        let full_path = match file.canonicalize() {
+            Ok(path) => path,
+            Err(_) => {
+                cwd.clone().join(&file)
+                // return;
+            }
+        };
+        *file = dir_path.join(full_path.strip_prefix("/").unwrap());
+
+
+        let sub_files: Vec<PathBuf> = match fs::read_dir(&file) {
+            Ok(entries) => entries.filter_map(|entry| entry.ok().map(|e| e.path())).collect(),
+            Err(e) => {
+                eprintln!("Failed to read directory {}: {}", file.display(), e);
+                return;
+            }
+        };
+
+
+        println!("{}:", file.display().to_string());
+        display_files(&sub_files, true);
+
+    }
+    
+    if args.debug{
+        println!("Len of files: {}", files.len());
+    }
+
+
 }
