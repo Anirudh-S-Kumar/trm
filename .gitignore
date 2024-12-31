@@ -2,3 +2,6 @@
 
 # vscode settings
 .vscode
+
+# Temporary files
+tmp*

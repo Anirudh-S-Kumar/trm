@@ -1,4 +1,5 @@
 mod trm;
+pub mod utils;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -15,14 +16,6 @@ fn main() {
 
     for file in &args.files {
         files.push(PathBuf::from(file));
-    }
-
-    match setup_logging() {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("Could not setup logging: {}", e);
-            std::process::exit(1);
-        }
     }
 
     let dir_path = match setup_directory(&args) {

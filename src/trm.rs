@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+use crate::utils::{append_to_logs, FileInfo, OpType};
 use clap::Parser;
 use lscolors::LsColors;
 use std::fs;
@@ -9,7 +9,7 @@ use std::{
 use term_grid::{Grid, GridOptions};
 
 pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
-pub static LOG_DIR: &str = "/var/log/trm";
+pub static LOG_FILE: &str = "/var/tmp/trm.log";
 
 #[derive(Parser, Debug, Default)]
 #[command(version, about = "trm - Temporary rm, a utility to reversibly remove your files", long_about=None)]
@@ -39,14 +39,6 @@ pub struct Args {
     /// Directory where to move
     #[arg(short, long, default_value_t = DEFAULT_DIR.to_string())]
     pub dir: String,
-}
-
-struct _FileInfo {
-    /// The original path from where the path was copied
-    path: String,
-
-    /// The datetime when it was moved
-    moved_time: DateTime<Local>,
 }
 
 macro_rules! get_file_name {
@@ -91,22 +83,6 @@ pub fn display_files(files: &Vec<PathBuf>, only_filename: bool) {
     );
 
     println!("{grid}");
-}
-
-pub fn setup_logging() -> Result<bool, Error> {
-    if let Err(e) = std::fs::create_dir_all(LOG_DIR) {
-        eprintln!("Failed to create logging directory {}: {}", LOG_DIR, e);
-        return Err(e);
-    }
-
-    let log_path = PathBuf::from(LOG_DIR);
-    let history_path = log_path.join("history");
-
-    if !history_path.try_exists().unwrap() {
-        std::fs::File::create(history_path).unwrap();
-    }
-
-    Ok(true)
 }
 
 pub fn setup_directory(args: &Args) -> Result<PathBuf, Error> {
@@ -220,6 +196,12 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>) {
                 if args.verbose {
                     println!("Successfully moved {} to trash", full_path.display());
                 }
+                append_to_logs(&FileInfo {
+                    src: full_path.display().to_string(),
+                    dst: new_location.display().to_string(),
+                    operation: OpType::TRASH,
+                    moved_time: chrono::offset::Local::now(),
+                });
             }
             Err(e) => {
                 eprintln!(
@@ -311,6 +293,13 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
                             full_path.display()
                         );
                     }
+
+                    append_to_logs(&FileInfo {
+                        src: file.display().to_string(),
+                        dst: full_path.display().to_string(),
+                        operation: OpType::RESTORE,
+                        moved_time: chrono::offset::Local::now(),
+                    });
                 }
                 Err(e) => {
                     eprintln!(
