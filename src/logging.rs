@@ -2,12 +2,9 @@ use crate::LOG_FILE;
 
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
-use slog::{info, o, Drain, Logger};
 use std::{
     fs::{File, OpenOptions},
-    io,
-    io::{BufRead, BufReader},
-    sync::Mutex,
+    io::{self, BufRead, BufReader, Error, Write},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -29,10 +26,10 @@ impl OpType {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FileInfo {
     /// The original path from where the path was moved
-    pub src: String,
+    pub src: Vec<String>,
 
     /// The path where the file ended up in  
-    pub dst: String,
+    pub dst: Vec<String>,
 
     /// Type of operation
     pub operation: OpType,
@@ -41,7 +38,7 @@ pub struct FileInfo {
     pub moved_time: DateTime<Local>,
 }
 
-fn init_logger() -> Logger {
+pub fn append_to_logs(info: &FileInfo) -> Result<(), Error> {
     let file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -49,28 +46,21 @@ fn init_logger() -> Logger {
         .open(LOG_FILE)
         .unwrap();
 
-    let drain = slog_json::Json::new(file).build().fuse();
-
-    Logger::root(Mutex::new(drain).fuse(), o!())
+    let mut writer = io::BufWriter::new(file);
+    let serialized_info = serde_json::to_string(info)?;
+    writeln!(writer, "{}", serialized_info)?;
+    writer.flush()?;
+    Ok(())
 }
 
-pub fn append_to_logs(info: &FileInfo) {
-    let logger = init_logger();
-    info!(logger, "File Operation";
-        "SRC" => &info.src,
-        "DST" => &info.dst,
-        "OPERATION" => &info.operation.as_str(),
-        "MOVED_TIME" => &info.moved_time.to_string()
-    );
-}
 
 pub fn _read_logs() -> io::Result<Vec<FileInfo>> {
-    let file = File::open(LOG_FILE).unwrap();
+    let file = File::open(LOG_FILE)?;
     let reader = BufReader::new(file);
     let mut logs: Vec<FileInfo> = vec![];
 
     for line in reader.lines() {
-        let line = line.unwrap();
+        let line = line?;
         if let Ok(log) = serde_json::from_str::<FileInfo>(&line) {
             logs.push(log);
         }

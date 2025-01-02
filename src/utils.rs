@@ -18,27 +18,14 @@ pub fn move_content(original: &PathBuf, new_location: &PathBuf) -> Result<(), Er
         Ok(_) => (),
         Err(_) => { // do a copy and delete
             if original.is_file(){ // if it is just a file, try normal copy and paste
-                if let Err(e) = fs::copy(&original, &new_location){
-                    return Err(e);
-                }
-
-                if let Err(e) = fs::remove_file(&original){
-                    return Err(e);
-                }
+                fs::copy(&original, &new_location)?;
+                fs::remove_file(&original)?;
                 return Ok(());
             }
 
             // perform copy and paste for a directory 
-            if let Err(e) = dircpy::copy_dir(&original, &new_location){
-                // eprintln!("Error moving files from {} to {}: {}", original.display(), new_location.display(), e);
-                // std::process::exit(1);
-                return Err(e);
-            }
-
-            // remove original directory
-            if let Err(e) = fs::remove_dir_all(&original){
-                return Err(e);
-            }
+            dircpy::copy_dir(&original, &new_location)?;
+            fs::remove_dir_all(&original)?
         }
     }
 
