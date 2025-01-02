@@ -1,5 +1,8 @@
+#[macro_use]
+mod utils;
 mod trm;
-pub mod utils;
+mod logging;
+
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -18,7 +21,7 @@ fn main() {
         files.push(PathBuf::from(file));
     }
 
-    let dir_path = match setup_directory(&args) {
+    let dir_path = match utils::setup_directory(&args) {
         Ok(path) => path,
         Err(e) => {
             eprintln!("Could not create directory: {}", e);

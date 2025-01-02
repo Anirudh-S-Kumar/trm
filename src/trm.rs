@@ -1,12 +1,12 @@
-use crate::utils::{append_to_logs, FileInfo, OpType};
+use crate::logging::{append_to_logs, FileInfo, OpType};
 use clap::Parser;
-use lscolors::LsColors;
 use std::fs;
 use std::{
-    io::{self, Error},
+    io::Error,
     path::PathBuf,
 };
-use term_grid::{Grid, GridOptions};
+
+use crate::utils;
 
 pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
 pub static LOG_FILE: &str = "/var/tmp/trm.log";
@@ -41,95 +41,12 @@ pub struct Args {
     pub dir: String,
 }
 
-macro_rules! get_file_name {
-    ($path:expr) => {
-        $path.file_name().unwrap().to_str().unwrap().to_string()
-    };
-}
 
-pub fn display_files(files: &Vec<PathBuf>, only_filename: bool) {
-    let lscolors = LsColors::from_env().unwrap_or_default();
-    let stdout_width = terminal_size::terminal_size_of(io::stdout())
-        .map(|(w, _h)| w.0 as _)
-        .unwrap_or(80);
-
-    let file_names: Vec<String> = files
-        .iter()
-        .map(|file| {
-            if let Some(style) = lscolors.style_for_path(&file) {
-                let crossterm_style = style.to_crossterm_style();
-                if only_filename {
-                    return crossterm_style.apply(get_file_name!(file)).to_string();
-                }
-                crossterm_style
-                    .apply(file.display().to_string())
-                    .to_string()
-            } else {
-                if only_filename {
-                    return get_file_name!(file);
-                }
-                file.display().to_string()
-            }
-        })
-        .collect();
-
-    let grid = Grid::new(
-        file_names,
-        GridOptions {
-            filling: term_grid::Filling::Spaces(2),
-            direction: term_grid::Direction::TopToBottom,
-            width: stdout_width,
-        },
-    );
-
-    println!("{grid}");
-}
-
-pub fn setup_directory(args: &Args) -> Result<PathBuf, Error> {
-    let dir: String;
-    let mut var_dir: String = String::new();
-
-    match std::env::var("XDG_DATA_HOME") {
-        Ok(default_dir) => {
-            var_dir = default_dir;
-        }
-        Err(_) => {}
-    }
-
-    if args.dir != DEFAULT_DIR {
-        dir = args.dir.clone();
-    } else if !var_dir.is_empty() {
-        dir = var_dir;
-    } else {
-        dir = args.dir.clone();
-    }
-
-    let dir_path = match PathBuf::from(&dir).canonicalize() {
-        Ok(dir) => dir,
-        Err(_) => {
-            if let Err(e) = fs::create_dir_all(&dir) {
-                eprintln!("Failed to create directory {}: {}", dir, e);
-                return Err(e);
-            }
-            PathBuf::from(&dir)
-        }
-    };
-
-    if args.debug {
-        println!(
-            "Temporary Directory Path: {}",
-            dir_path.display().to_string()
-        );
-    }
-
-    Ok(dir_path)
-}
 
 /// This does the following
 ///
 /// 1. Create a info file, which stores the name and time at which it was moved here
 /// 2. Move the file
-/// TODO: Refactor the logic for finding new file path and transfer the move logic back to the main file
 pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>) {
     for file in files {
         let full_path = match file.canonicalize() {
@@ -191,7 +108,7 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>) {
             println!("New file location: {}", new_location.display());
         }
 
-        match fs::rename(&full_path, &new_location) {
+        match utils::move_content(&full_path, &new_location){ 
             Ok(_) => {
                 if args.verbose {
                     println!("Successfully moved {} to trash", full_path.display());
@@ -255,7 +172,7 @@ pub fn list_delete_files(
             println!("No files found under {}", file.display());
         } else {
             println!("{}:", file.display().to_string());
-            display_files(&sub_files, true);
+            utils::display_files(&sub_files, true);
         }
     }
 
@@ -285,7 +202,7 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
         }
 
         if file.exists() {
-            match fs::rename(&file, &full_path) {
+            match utils::move_content(&file, &full_path) {
                 Ok(_) => {
                     if args.verbose {
                         println!(

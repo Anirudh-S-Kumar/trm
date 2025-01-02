@@ -1,80 +1,127 @@
-use crate::LOG_FILE;
+use std::{fs, io::{self, Error}, path::PathBuf};
+use lscolors::LsColors;
+use term_grid::{Grid, GridOptions};
 
-use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
-use slog::{info, o, Drain, Logger};
-use std::{
-    fs::{File, OpenOptions},
-    io,
-    io::{BufRead, BufReader},
-    sync::Mutex,
-};
+use crate::trm::{DEFAULT_DIR, Args};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum OpType {
-    TRASH,
-    RESTORE,
+
+#[macro_export]
+macro_rules! get_file_name {
+    ($path:expr) => {
+        $path.file_name().unwrap().to_str().unwrap().to_string()
+    };
 }
 
-impl OpType {
-    #[allow(dead_code)]
-    fn as_str(&self) -> &str {
-        match self {
-            OpType::TRASH => "Trash",
-            OpType::RESTORE => "Restore",
+
+pub fn move_content(original: &PathBuf, new_location: &PathBuf) -> Result<(), Error>{
+    match fs::rename(&original, &new_location){
+        Ok(_) => (),
+        Err(_) => { // do a copy and delete
+            if original.is_file(){ // if it is just a file, try normal copy and paste
+                if let Err(e) = fs::copy(&original, &new_location){
+                    return Err(e);
+                }
+
+                if let Err(e) = fs::remove_file(&original){
+                    return Err(e);
+                }
+                return Ok(());
+            }
+
+            // perform copy and paste for a directory 
+            if let Err(e) = dircpy::copy_dir(&original, &new_location){
+                // eprintln!("Error moving files from {} to {}: {}", original.display(), new_location.display(), e);
+                // std::process::exit(1);
+                return Err(e);
+            }
+
+            // remove original directory
+            if let Err(e) = fs::remove_dir_all(&original){
+                return Err(e);
+            }
         }
     }
+
+    Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct FileInfo {
-    /// The original path from where the path was moved
-    pub src: String,
 
-    /// The path where the file ended up in  
-    pub dst: String,
 
-    /// Type of operation
-    pub operation: OpType,
+pub fn display_files(files: &Vec<PathBuf>, only_filename: bool) {
+    let lscolors = LsColors::from_env().unwrap_or_default();
+    let stdout_width = terminal_size::terminal_size_of(io::stdout())
+        .map(|(w, _h)| w.0 as _)
+        .unwrap_or(80);
 
-    /// The datetime when it was moved
-    pub moved_time: DateTime<Local>,
-}
+    let file_names: Vec<String> = files
+        .iter()
+        .map(|file| {
+            if let Some(style) = lscolors.style_for_path(&file) {
+                let crossterm_style = style.to_crossterm_style();
+                if only_filename {
+                    return crossterm_style.apply(get_file_name!(file)).to_string();
+                }
+                crossterm_style
+                    .apply(file.display().to_string())
+                    .to_string()
+            } else {
+                if only_filename {
+                    return get_file_name!(file);
+                }
+                file.display().to_string()
+            }
+        })
+        .collect();
 
-fn init_logger() -> Logger {
-    let file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(true)
-        .open(LOG_FILE)
-        .unwrap();
-
-    let drain = slog_json::Json::new(file).build().fuse();
-
-    Logger::root(Mutex::new(drain).fuse(), o!())
-}
-
-pub fn append_to_logs(info: &FileInfo) {
-    let logger = init_logger();
-    info!(logger, "File Operation";
-        "SRC" => &info.src,
-        "DST" => &info.dst,
-        "OPERATION" => &info.operation.as_str(),
-        "MOVED_TIME" => &info.moved_time.to_string()
+    let grid = Grid::new(
+        file_names,
+        GridOptions {
+            filling: term_grid::Filling::Spaces(2),
+            direction: term_grid::Direction::TopToBottom,
+            width: stdout_width,
+        },
     );
+
+    println!("{grid}");
 }
 
-pub fn read_logs() -> io::Result<Vec<FileInfo>> {
-    let file = File::open(LOG_FILE).unwrap();
-    let reader = BufReader::new(file);
-    let mut logs: Vec<FileInfo> = vec![];
+pub fn setup_directory(args: &Args) -> Result<PathBuf, Error> {
+    let dir: String;
+    let mut var_dir: String = String::new();
 
-    for line in reader.lines() {
-        let line = line.unwrap();
-        if let Ok(log) = serde_json::from_str::<FileInfo>(&line) {
-            logs.push(log);
+    match std::env::var("XDG_DATA_HOME") {
+        Ok(default_dir) => {
+            var_dir = default_dir;
         }
+        Err(_) => {}
     }
 
-    Ok(logs)
+    if args.dir != DEFAULT_DIR {
+        dir = args.dir.clone();
+    } else if !var_dir.is_empty() {
+        dir = var_dir;
+    } else {
+        dir = args.dir.clone();
+    }
+
+    let dir_path = match PathBuf::from(&dir).canonicalize() {
+        Ok(dir) => dir,
+        Err(_) => {
+            if let Err(e) = fs::create_dir_all(&dir) {
+                eprintln!("Failed to create directory {}: {}", dir, e);
+                return Err(e);
+            }
+            PathBuf::from(&dir)
+        }
+    };
+
+    if args.debug {
+        println!(
+            "Temporary Directory Path: {}",
+            dir_path.display().to_string()
+        );
+    }
+
+    Ok(dir_path)
 }
+
