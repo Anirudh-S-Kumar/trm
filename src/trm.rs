@@ -43,13 +43,32 @@ pub struct Args {
 }
 
 #[derive(Subcommand, Debug)]
-#[command(long_about = None, about = "")]
 pub enum Commands{
     /// Shows history of all operations performed. By default it shows all the operations performed in current working directory
+    #[command(about = "Shows history of all operations performed. For details on format for `before`, use --help", 
+        long_about = "Shows history of all operations performed. By default it shows all the operations performed in current working directory
+
+The `before` option supports the following syntax for specifying time
+Example value could be `1hour 12min 5s`
+
+* `nsec`, `ns` -- nanoseconds
+* `usec`, `us` -- microseconds
+* `msec`, `ms` -- milliseconds
+* `seconds`, `second`, `sec`, `s`
+* `minutes`, `minute`, `min`, `m`
+* `hours`, `hour`, `hr`, `h`
+* `days`, `day`, `d`
+* `weeks`, `week`, `w`
+* `months`, `month`, `M` -- defined as 30.44 days
+* `years`, `year`, `y` -- defined as 365.25 days")]
     History {
         /// Show all the history
         #[arg(short, long)]
-        all: bool
+        all: bool,
+
+        /// Show all changes before current time - given time
+        #[arg(short, long, value_parser = humantime::parse_duration)]
+        before: Option<std::time::Duration>
     }
 }
 

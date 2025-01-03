@@ -3,9 +3,10 @@ mod utils;
 mod logging;
 mod trm;
 
+use chrono::Local;
 use clap::Parser;
-use logging::read_all_logs;
-use std::path::PathBuf;
+use logging::display_logs;
+use std::{path::PathBuf, process::exit};
 use trm::{Args, Commands, list_delete_files, recover_files, move_files};
 
 fn main() {
@@ -13,7 +14,7 @@ fn main() {
 
     if let Err(e) = args.validate(){
         eprintln!("Error validating args: {}", e);
-        std::process::exit(1);
+        exit(1);
     }
 
 
@@ -31,7 +32,7 @@ fn main() {
         Ok(path) => path,
         Err(e) => {
             eprintln!("Could not create directory: {}", e);
-            std::process::exit(1);
+            exit(1);
         }
     };
 
@@ -42,13 +43,22 @@ fn main() {
     } else if args.list {
         if let Err(e) = list_delete_files(&args, &dir_path, &mut files, false) {
             eprintln!("Error listing or deleting files: {}", e);
-            std::process::exit(1);
+            exit(1);
         }
     } else if args.undo {
         recover_files(&args, &dir_path, &mut files, false);
-    } else if let Some(Commands::History {all}) = args.command {
+    } else if let Some(Commands::History {all, before}) = args.command {
         if all{
-            read_all_logs();
+            display_logs(logging::Filter::All);
+        } else if let Some(before_duration) = before{
+            let now = Local::now();
+            let before_time = chrono::Duration::seconds(before_duration.as_secs() as i64);
+            let cutoff = now - before_time;
+            display_logs(logging::Filter::Before(cutoff));
+        } 
+        else{
+            let cwd = std::env::current_dir().unwrap();
+            display_logs(logging::Filter::Prefix(cwd));
         }
     } else {
         move_files(&args, &dir_path, &files);
