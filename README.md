@@ -8,7 +8,11 @@
 ```
 trm - Temporary rm, a utility to reversibly remove your files
 
-Usage: trm [OPTIONS] [FILES]...
+Usage: trm [OPTIONS] [FILES]... [COMMAND]
+
+Commands:
+  history  Shows history of all operations performed. For details on format for `before`, use --help
+  help     Print this message or the help of the given subcommand(s)
 
 Arguments:
   [FILES]...  Files to delete
@@ -46,4 +50,3 @@ $ trm -lu
 ## Notes
 
 - If you do have `$XDG_DATA_HOME` set, the default directory will be `$XDG_DATA_HOME/trm_files`. Otherwise, it will be `/var/tmp/trm_files`.
-- Currently doesn't work for different mount points, that's a WIP.
