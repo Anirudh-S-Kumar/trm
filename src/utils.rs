@@ -1,9 +1,12 @@
-use std::{fs, io::{self, Error}, path::PathBuf};
 use lscolors::LsColors;
+use std::{
+    fs,
+    io::{self, Error},
+    path::PathBuf,
+};
 use term_grid::{Grid, GridOptions};
 
-use crate::trm::{DEFAULT_DIR, Args};
-
+use crate::trm::{Args, DEFAULT_DIR};
 
 #[macro_export]
 macro_rules! get_file_name {
@@ -12,18 +15,19 @@ macro_rules! get_file_name {
     };
 }
 
-
-pub fn move_content(original: &PathBuf, new_location: &PathBuf) -> Result<(), Error>{
-    match fs::rename(&original, &new_location){
+pub fn move_content(original: &PathBuf, new_location: &PathBuf) -> Result<(), Error> {
+    match fs::rename(&original, &new_location) {
         Ok(_) => (),
-        Err(_) => { // do a copy and delete
-            if original.is_file(){ // if it is just a file, try normal copy and paste
+        Err(_) => {
+            // do a copy and delete
+            if original.is_file() {
+                // if it is just a file, try normal copy and paste
                 fs::copy(&original, &new_location)?;
                 fs::remove_file(&original)?;
                 return Ok(());
             }
 
-            // perform copy and paste for a directory 
+            // perform copy and paste for a directory
             dircpy::copy_dir(&original, &new_location)?;
             fs::remove_dir_all(&original)?
         }
@@ -31,8 +35,6 @@ pub fn move_content(original: &PathBuf, new_location: &PathBuf) -> Result<(), Er
 
     Ok(())
 }
-
-
 
 pub fn display_files(files: &Vec<PathBuf>, only_filename: bool) {
     let lscolors = LsColors::from_env().unwrap_or_default();
@@ -111,4 +113,3 @@ pub fn setup_directory(args: &Args) -> Result<PathBuf, Error> {
 
     Ok(dir_path)
 }
-

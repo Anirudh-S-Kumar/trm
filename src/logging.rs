@@ -1,6 +1,7 @@
-use crate::LOG_FILE;
+use crate::trm::LOG_FILE;
 
 use chrono::{DateTime, Local};
+use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Table};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -13,12 +14,11 @@ pub enum OpType {
     RESTORE,
 }
 
-impl OpType {
-    #[allow(dead_code)]
-    fn as_str(&self) -> &str {
-        match self {
-            OpType::TRASH => "Trash",
-            OpType::RESTORE => "Restore",
+impl OpType{
+    pub fn to_string(&self) -> String{
+        match &self{
+            Self::TRASH => String::from("Trash"),
+            Self::RESTORE => String::from("Restore")
         }
     }
 }
@@ -53,18 +53,29 @@ pub fn append_to_logs(info: &FileInfo) -> Result<(), Error> {
     Ok(())
 }
 
-
-pub fn _read_logs() -> io::Result<Vec<FileInfo>> {
-    let file = File::open(LOG_FILE)?;
+pub fn read_all_logs() {
+    let file = File::open(LOG_FILE).unwrap();
     let reader = BufReader::new(file);
-    let mut logs: Vec<FileInfo> = vec![];
+    let mut table = Table::new();
+
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec!["Time", "Operation", "Source", "Destination"]);
+    
 
     for line in reader.lines() {
-        let line = line?;
+        let line = line.unwrap();
         if let Ok(log) = serde_json::from_str::<FileInfo>(&line) {
-            logs.push(log);
+            table.add_row(vec![
+                log.moved_time.to_rfc2822(),
+                log.operation.to_string(),
+                log.src.join("\n"),
+                log.dst.join("\n")
+                ]
+            );
         }
     }
 
-    Ok(logs)
+    println!("{}", table);
 }

@@ -1,11 +1,8 @@
 use crate::logging::{append_to_logs, FileInfo, OpType};
 use chrono::Local;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::fs;
-use std::{
-    io::Error,
-    path::PathBuf,
-};
+use std::{io::Error, path::PathBuf};
 
 use crate::utils;
 
@@ -14,10 +11,12 @@ pub static LOG_FILE: &str = "/var/tmp/trm.log";
 
 #[derive(Parser, Debug, Default)]
 #[command(version, about = "trm - Temporary rm, a utility to reversibly remove your files", long_about=None)]
-#[command(arg_required_else_help(true))]
+#[command(subcommand_required = false, arg_required_else_help = true)]
 pub struct Args {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
     /// Files to delete    
-    #[arg(required_unless_present="list", num_args = 0..)]
     pub files: Vec<String>,
 
     /// Display full file paths or not
@@ -40,6 +39,27 @@ pub struct Args {
     /// Directory where to move
     #[arg(short, long, default_value_t = DEFAULT_DIR.to_string())]
     pub dir: String,
+
+}
+
+#[derive(Subcommand, Debug)]
+#[command(long_about = None, about = "")]
+pub enum Commands{
+    /// Shows history of all operations performed. By default it shows all the operations performed in current working directory
+    History {
+        /// Show all the history
+        #[arg(short, long)]
+        all: bool
+    }
+}
+
+impl Args{
+    pub fn validate(&self) -> Result<(), String>{
+        if self.command.is_none() && !self.list && self.files.is_empty(){
+            return Err("Files must be provided when not using history, or --list".to_string());
+        }
+        Ok(())
+    }
 }
 
 
@@ -49,8 +69,8 @@ pub struct Args {
 /// 1. Create a info file, which stores the name and time at which it was moved here
 /// 2. Move the file
 pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>) {
-    let mut src_files : Vec<String> = Vec::with_capacity(files.len());
-    let mut dst_files : Vec<String> = Vec::with_capacity(files.len());
+    let mut src_files: Vec<String> = Vec::with_capacity(files.len());
+    let mut dst_files: Vec<String> = Vec::with_capacity(files.len());
 
     for file in files {
         let full_path = match file.canonicalize() {
@@ -112,14 +132,14 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>) {
             println!("New file location: {}", new_location.display());
         }
 
-        match utils::move_content(&full_path, &new_location){ 
+        match utils::move_content(&full_path, &new_location) {
             Ok(_) => {
                 if args.verbose {
                     println!("Successfully moved {} to trash", full_path.display());
                 }
                 src_files.push(full_path.display().to_string());
-                dst_files.push(new_location.display().to_string()); 
-            },
+                dst_files.push(new_location.display().to_string());
+            }
             Err(e) => {
                 eprintln!(
                     "Failed to move files from {} to {}: {}",
@@ -134,10 +154,10 @@ pub fn move_files(args: &Args, dir_path: &PathBuf, files: &Vec<PathBuf>) {
 
     if let Err(e) = append_to_logs(&FileInfo {
         src: src_files,
-        dst: dst_files, 
-        operation: OpType::TRASH, 
-        moved_time: Local::now()})
-    {
+        dst: dst_files,
+        operation: OpType::TRASH,
+        moved_time: Local::now(),
+    }) {
         eprintln!("Failed to append to logs: {}", e);
         std::process::exit(1);
     }
@@ -200,8 +220,8 @@ pub fn list_delete_files(
 pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, from_trash: bool) {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut src_files : Vec<String> = Vec::with_capacity(files.len());
-    let mut dst_files : Vec<String> = Vec::with_capacity(files.len());
+    let mut src_files: Vec<String> = Vec::with_capacity(files.len());
+    let mut dst_files: Vec<String> = Vec::with_capacity(files.len());
 
     for file in files.iter_mut() {
         let mut full_path = match file.canonicalize() {
@@ -242,12 +262,12 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
         }
     }
 
-    if let Err(e) = append_to_logs(&FileInfo{
-        src: src_files, 
-        dst: dst_files, 
-        operation: OpType::RESTORE, 
-        moved_time: Local::now()})
-    {
+    if let Err(e) = append_to_logs(&FileInfo {
+        src: src_files,
+        dst: dst_files,
+        operation: OpType::RESTORE,
+        moved_time: Local::now(),
+    }) {
         eprintln!("Failed to append to logs: {}", e);
         std::process::exit(1);
     }

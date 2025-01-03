@@ -1,15 +1,21 @@
 #[macro_use]
 mod utils;
-mod trm;
 mod logging;
-
+mod trm;
 
 use clap::Parser;
+use logging::read_all_logs;
 use std::path::PathBuf;
-use trm::*;
+use trm::{Args, Commands, list_delete_files, recover_files, move_files};
 
 fn main() {
     let args = Args::parse();
+
+    if let Err(e) = args.validate(){
+        eprintln!("Error validating args: {}", e);
+        std::process::exit(1);
+    }
+
 
     let mut files: Vec<PathBuf> = vec![];
 
@@ -40,6 +46,10 @@ fn main() {
         }
     } else if args.undo {
         recover_files(&args, &dir_path, &mut files, false);
+    } else if let Some(Commands::History {all}) = args.command {
+        if all{
+            read_all_logs();
+        }
     } else {
         move_files(&args, &dir_path, &files);
     }
