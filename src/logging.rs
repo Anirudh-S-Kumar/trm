@@ -1,10 +1,11 @@
-use crate::trm::LOG_FILE;
+use crate::trm::{Args, LOG_FILE};
 
 use chrono::{DateTime, Local};
+
 use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Table};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{File, OpenOptions}, io::{self, BufRead, BufReader, Error, Write}, path::PathBuf, process::exit
+    fs::{self, File, OpenOptions}, io::{self, BufRead, BufReader, Error, Write}, path::{Path, PathBuf}, process::exit
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -103,8 +104,8 @@ fn read_logs(filter: Filter) -> Vec<FileInfo> {
                         }
                     }
                 }
-                Filter::Before(date_time) => {
-                    if log.moved_time < *date_time{
+                Filter::Before(cutoff) => {
+                    if log.moved_time < *cutoff{
                         logs.push(log);
                     } else{
                         break;
@@ -140,10 +141,83 @@ pub fn display_logs(filter: Filter){
     println!("{}", table);
 }
 
+/// Purge old files in trash and also remove corresponding entries in log
+pub fn purge_logs(args: &Args, cutoff: DateTime<Local>){
+    let file = match File::open(LOG_FILE){
+        Ok(file ) => file,
+        Err(e) => {
+            eprintln!("Unable to open log file {}: {}", LOG_FILE, e);
+            exit(1);
+        }
+    };
 
+    let mut new_logs: Vec<FileInfo> = vec![];
 
-// pub fn _read_cwd_logs(){
-//     let logs = read_logs(Filter::All);
-//     let mut table = generate_table(); 
+    let reader = BufReader::new(file);
+    for line in reader.lines(){
+        let line = match line{
+            Ok(line) => line,
+            Err(e) => {
+                eprintln!("Unable to parse log: {}", e);
+                exit(1);
+            }    
+        };
+        if let Ok(log) = serde_json::from_str::<FileInfo>(&line) {
+            if log.moved_time < cutoff{
+                if log.operation == OpType::RESTORE{
+                    continue;
+                } 
+                for dst in log.dst{
+                    let dst = PathBuf::from(dst);
+                    if !dst.exists(){
+                        if args.verbose{
+                            println!("Path {} does not exist. Skipping", dst.display());
+                        }
+                        continue;
+                    }
 
-// }
+                    // Delete the file/directory
+                    let mut curr_parent = dst.parent().unwrap();
+                    if dst.is_dir(){
+                        if let Err(e) = fs::remove_dir_all(&dst){
+                            eprintln!("Error deleting directory {}: {}", dst.display(), e);
+                        } else if args.verbose{
+                            println!("Removed {}", dst.display());
+                        }
+                    }
+                    else{
+                        if let Err(e) = fs::remove_file(&dst){
+                            eprintln!("Error deleting file {}: {}", dst.display(), e);
+                        } else if args.verbose{
+                            println!("Removed {}", dst.display());
+                        }
+                    }
+                    while curr_parent.exists(){
+                        let new_parent = curr_parent.parent().unwrap_or_else(|| Path::new(""));
+                        if let Err(_) = fs::remove_dir(curr_parent){
+                            break;
+                        }
+                        curr_parent = new_parent;
+                    }
+                }
+            } else{
+                new_logs.push(log);
+            }
+        }
+    }
+
+    // write new log to file
+    let file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(LOG_FILE)
+        .unwrap();
+
+    let mut writer = io::BufWriter::new(file);
+    for log in new_logs{
+        let serialized_info = serde_json::to_string(&log).unwrap();
+        writeln!(writer, "{}", serialized_info).unwrap();
+    }
+    writer.flush().unwrap();
+
+}

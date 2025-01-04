@@ -68,7 +68,21 @@ Example value could be `1hour 12min 5s`
 
         /// Show all changes before current time - given time
         #[arg(short, long, value_parser = humantime::parse_duration)]
+        before: Option<std::time::Duration>,
+
+        /// Directory to see history of. If no path specified, will show history in cwd
+        #[arg(long, default_value_t = String::new())]
+        path: String
+    },
+
+    
+    /// Purge from trash and also corresponding logs. If --before not specified then takes 30 days as default
+    Purge {
+        /// Remove items before current time - given time. Follows same semantics as in history 
+        #[arg(short, long, value_parser = humantime::parse_duration)]
         before: Option<std::time::Duration>
+
+        //TODO: Add a confirmation option for purging
     }
 }
 
@@ -281,6 +295,10 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
         }
     }
 
+    if src_files.is_empty(){
+        return;
+    }
+
     if let Err(e) = append_to_logs(&FileInfo {
         src: src_files,
         dst: dst_files,
@@ -291,3 +309,4 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
         std::process::exit(1);
     }
 }
+
