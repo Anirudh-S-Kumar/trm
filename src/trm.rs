@@ -93,7 +93,7 @@ Example value could be `1hour 12min 5s`
     },
 
     
-    /// Purge from trash and also corresponding logs. If --before not specified then takes 30 days as default
+    /// Purge from trash and also corresponding logs. No files are deleted if --before is not provided
     Purge {
         /// Remove items before current time - given time. Follows same semantics as in history 
         #[arg(short, long, value_parser = humantime::parse_duration)]

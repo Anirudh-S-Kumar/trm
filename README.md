@@ -96,21 +96,30 @@ $ trm history --all
 
 ## Purge
 ```
-Purge from trash and also corresponding logs. If --before not specified then takes 30 days as default
+Purge from trash and also corresponding logs. No files are deleted if --before is not provided
 
-Usage: trm purge [OPTIONS] <BEFORE>
-
-Arguments:
-  <BEFORE>  Remove items before current time - given time. Follows same semantics as in history
+Usage: trm purge [OPTIONS]
 
 Options:
-  -q, --quiet  Confirm before purging
-  -h, --help   Print help
+  -b, --before <BEFORE>  Remove items before current time - given time. Follows same semantics as in history
+  -q, --quiet            Confirm before purging
+  -a, --all              Purge all files in trash
+  -h, --help             Print help
 ```
 
 Duration must always be specified, which follow same semantics as in history:
 ```
 $ trm purge --before 1d
+```
+
+Or can purge all the files in trash:
+```
+$ trm purge --all
+```
+
+By default, it will ask for confirmation before purging, but can be disabled:
+```
+$ trm purge --before 1d --quiet
 ```
 
 
