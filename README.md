@@ -12,7 +12,7 @@ Usage: trm [OPTIONS] [FILES]... [COMMAND]
 
 Commands:
   history  Shows history of all operations performed. For details on format for `before`, use --help
-  purge    Purge from trash and also corresponding logs
+  purge    Purge from trash and also corresponding logs. If --before not specified then takes 30 days as default
   help     Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -21,7 +21,8 @@ Arguments:
 Options:
   -v, --verbose    Display full file paths or not
       --debug      Debug output
-  -u, --undo       
+  -u, --undo       Recover files from the trash
+  -a, --all        All operation. If combined with -l, will list all files in trash If combined with --undo, will recover all files from trash
   -l, --list       Display all files trashed under given directories. Takes current directory as default if no other directory given
   -d, --dir <DIR>  Directory where to move [default: /var/tmp/trm_files]
   -h, --help       Print help
@@ -47,6 +48,17 @@ To recover all files trashed in current directory:
 ```
 $ trm -lu
 ```
+
+`--all` command can also be used to list all trashed files:
+```
+$ trm -la
+```
+
+and same for undo to recover all files:
+```
+$ trm -ua
+```
+
 
 ## History of logs
 ```
@@ -77,23 +89,26 @@ Or for a specific directory:
 $ trm history --path /path/to/dir
 ```
 
+or all logs:
+```
+$ trm history --all
+```
+
 ## Purge
 ```
-Purge from trash and also corresponding logs
+Purge from trash and also corresponding logs. If --before not specified then takes 30 days as default
 
-Usage: trm purge [OPTIONS]
+Usage: trm purge [OPTIONS] <BEFORE>
+
+Arguments:
+  <BEFORE>  Remove items before current time - given time. Follows same semantics as in history
 
 Options:
-  -b, --before <BEFORE>  Remove items before current time - given time. Follows same semantics as in history
-  -h, --help             Print help
+  -q, --quiet  Confirm before purging
+  -h, --help   Print help
 ```
 
-By default, it will remove files that are older than 30 days:
-```
-$ trm purge
-```
-
-But duration can be specified, which follow same semantics as in history:
+Duration must always be specified, which follow same semantics as in history:
 ```
 $ trm purge --before 1d
 ```

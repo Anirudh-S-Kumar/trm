@@ -6,7 +6,7 @@ use std::{
 };
 use term_grid::{Grid, GridOptions};
 
-use crate::trm::{Args, DEFAULT_DIR};
+use crate::trm::{Args, get_default_dir};
 
 #[macro_export]
 macro_rules! get_file_name {
@@ -85,7 +85,7 @@ pub fn setup_directory(args: &Args) -> Result<PathBuf, Error> {
         Err(_) => {}
     }
 
-    if args.dir != DEFAULT_DIR {
+    if args.dir != get_default_dir() {
         dir = args.dir.clone();
     } else if !var_dir.is_empty() {
         dir = var_dir;

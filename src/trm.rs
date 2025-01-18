@@ -6,8 +6,18 @@ use std::{io::Error, path::PathBuf};
 
 use crate::utils;
 
-pub static DEFAULT_DIR: &str = "/var/tmp/trm_files";
-pub static LOG_FILE: &str = "/var/tmp/trm.log";
+
+pub fn get_default_dir() -> String {
+    let user =std::env::var("USER").unwrap();
+    format!("/tmp/trm-{}", user)
+}
+
+pub fn get_log_file() -> String {
+    let user =std::env::var("USER").unwrap();
+    format!("/tmp/trm-{}.log", user)
+}
+
+
 
 #[derive(Parser, Debug, Default)]
 #[command(version, about = "trm - Temporary rm, a utility to reversibly remove your files", long_about=None)]
@@ -44,7 +54,7 @@ pub struct Args {
     pub list: bool,
 
     /// Directory where to move
-    #[arg(short, long, default_value_t = DEFAULT_DIR.to_string())]
+    #[arg(short, long, default_value_t = get_default_dir())]
     pub dir: String,
 
 }
@@ -90,15 +100,29 @@ Example value could be `1hour 12min 5s`
         before: Option<std::time::Duration>,
 
         /// Confirm before purging
-        #[arg(short, long, default_value_t = true)]
-        confirm: bool
+        #[arg(short, long, default_value_t = false)]
+        quiet: bool,
+
+        /// Purge all files in trash
+        #[arg(short, long)]
+        all: bool
     }
 }
 
 impl Args{
     pub fn validate(&self) -> Result<(), String>{
-        if self.command.is_none() && !self.list && self.files.is_empty(){
-            return Err("Files must be provided when not using history, or --list".to_string());
+        // cases where files are not provided
+        // 1. list is true
+        // 2. some subcommand is provided
+        // 3. undo and all are true
+        let conditions = vec![
+            self.list,
+            self.undo && self.all,
+            self.command.is_some()
+        ];
+
+        if !self.files.is_empty() && conditions.iter().any(|&x| x){
+            return Err("Files must be provided".to_string());
         }
 
         // list, undo and all cannot be combined
@@ -319,12 +343,10 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
 }
 
 /// List all files in trash
-pub fn list_all_files(return_list: bool) -> Vec<PathBuf>{
-    let trash_dir = PathBuf::from(DEFAULT_DIR);
-    
+pub fn list_all_files(dir_path: &PathBuf, return_list: bool) -> Vec<PathBuf>{
     let mut files: Vec<PathBuf> = Vec::with_capacity(1000);
 
-    for file in walkdir::WalkDir::new(trash_dir){
+    for file in walkdir::WalkDir::new(dir_path){
         files.push(file.unwrap().path().to_path_buf());
     }
 
@@ -339,7 +361,6 @@ pub fn list_all_files(return_list: bool) -> Vec<PathBuf>{
 
 /// Recover all files from trash
 pub fn recover_all_files(args: &Args, dir_path: &PathBuf){
-    let mut all_trash_files = list_all_files(true);
-
+    let mut all_trash_files = list_all_files(&dir_path, true);
     recover_files(args, dir_path, &mut all_trash_files, true);
 }

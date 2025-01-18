@@ -3,7 +3,7 @@ mod utils;
 mod logging;
 mod trm;
 
-use chrono::{Local, TimeDelta, Duration};
+use chrono::{Local, Duration};
 use clap::Parser;
 use logging::{display_logs, purge_logs, Filter};
 use std::{path::PathBuf, process::exit};
@@ -42,7 +42,7 @@ fn main() {
         recover_files(&args, &dir_path, &mut flattened_files, true);
     } 
     else if args.list && args.all{
-        list_all_files(false);
+        list_all_files(&dir_path, false);
     }
     else if args.undo && args.all{
         recover_all_files(&args, &dir_path);
@@ -79,18 +79,22 @@ fn main() {
             display_logs(Filter::Prefix(cwd));
         }
     } 
-    else if let Some(Commands::Purge { before , confirm}) = args.command{
+    else if let Some(Commands::Purge { before , quiet, all}) = args.command{
         let now = Local::now();
-        let before_time: TimeDelta;
 
-        if let Some(before_duration) = before {
-            before_time = Duration::seconds(before_duration.as_secs() as i64);
-        } 
-        else{
-            before_time = Duration::days(30); // default is 30 days
+        if all{
+            purge_logs(&args, now, quiet);
+            return;
         }
-        let cutoff = now - before_time;
-        purge_logs(&args, cutoff, confirm);
+
+        if let Some(before_duration) = before{
+            let before_time = Duration::seconds(before_duration.as_secs() as i64);
+            let cutoff = now - before_time;
+            purge_logs(&args, cutoff, quiet);
+        } else{
+            eprintln!("No cutoff time provided");
+            exit(1);
+        }
     }
     else {
         move_files(&args, &dir_path, &files);

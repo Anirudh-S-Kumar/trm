@@ -1,4 +1,4 @@
-use crate::trm::{Args, LOG_FILE};
+use crate::trm::{Args, get_log_file};
 
 use chrono::{DateTime, Local};
 
@@ -43,7 +43,7 @@ pub fn append_to_logs(info: &FileInfo) -> Result<(), Error> {
         .create(true)
         .write(true)
         .append(true)
-        .open(LOG_FILE)
+        .open(get_log_file())
         .unwrap();
 
     let mut writer = io::BufWriter::new(file);
@@ -69,10 +69,10 @@ pub enum Filter{
 }
 
 fn read_logs(filter: Filter) -> Vec<FileInfo> {
-    let file = match File::open(LOG_FILE){
+    let file = match File::open(get_log_file()){
         Ok(file ) => file,
         Err(e) => {
-            eprintln!("Unable to open log file {}: {}", LOG_FILE, e);
+            eprintln!("Unable to open log file {}: {}", get_log_file(), e);
             exit(1);
         }
     };
@@ -142,11 +142,11 @@ pub fn display_logs(filter: Filter){
 }
 
 /// Purge old files in trash and also remove corresponding entries in log
-pub fn purge_logs(args: &Args, cutoff: DateTime<Local>, confirm: bool){
-    let file = match File::open(LOG_FILE){
+pub fn purge_logs(args: &Args, cutoff: DateTime<Local>, quiet: bool){
+    let file = match File::open(get_log_file()){
         Ok(file ) => file,
         Err(e) => {
-            eprintln!("Unable to open log file {}: {}", LOG_FILE, e);
+            eprintln!("Unable to open log file {}: {}", get_log_file(), e);
             exit(1);
         }
     };
@@ -186,12 +186,13 @@ pub fn purge_logs(args: &Args, cutoff: DateTime<Local>, confirm: bool){
         }
     }
 
-    if confirm{
+    if !quiet && !to_be_deleted_files.is_empty(){
         let mut input = String::new();
         for file in &to_be_deleted_files{
             println!("{}", file.display());
         }
-        println!("The following files will be deleted. Do you want to continue? [y/N]");
+        print!("The above files will be deleted. Do you want to continue? [y/N]: ");
+        io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).unwrap();
         if input.trim().to_lowercase() != "y"{
             println!("Aborting");
@@ -230,7 +231,7 @@ pub fn purge_logs(args: &Args, cutoff: DateTime<Local>, confirm: bool){
     let file = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open(LOG_FILE)
+        .open(get_log_file())
         .unwrap();
 
     let mut writer = io::BufWriter::new(file);
