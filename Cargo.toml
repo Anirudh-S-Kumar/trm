@@ -2,13 +2,12 @@
 name = "trm"
 version = "1.0.0"
 edition = "2021"
-authors = ["Anirudh S. Kumar <anirudh.skumar.03@gmail.com"]
-description = "trm - Temporary rm. A safer alternative to rm."
+authors = ["Anirudh S. Kumar <anirudh.skumar.03@gmail.com>"]
+description = "Temporary rm. A safer alternative to rm."
 license = "MIT"
-license-file = "LICENSE"
 repository = "https://github.com/Anirudh-S-Kumar/trm"
 readme = "README.md"
-keywords = ["rm", "trash", "delete", "remove", "safe", "safer", "alternative", "trash-cli"]
+keywords = ["cli", "trash", "delete", "safe", "trash-cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
