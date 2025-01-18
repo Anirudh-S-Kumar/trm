@@ -7,7 +7,7 @@ use chrono::{Local, TimeDelta, Duration};
 use clap::Parser;
 use logging::{display_logs, purge_logs, Filter};
 use std::{path::PathBuf, process::exit};
-use trm::{Args, Commands, list_delete_files, recover_files, move_files};
+use trm::{list_all_files, recover_all_files, list_delete_files, move_files, recover_files, Args, Commands};
 
 fn main() {
     let args = Args::parse();
@@ -41,6 +41,12 @@ fn main() {
         let mut flattened_files: Vec<PathBuf> = deleted_files.into_iter().flatten().collect();
         recover_files(&args, &dir_path, &mut flattened_files, true);
     } 
+    else if args.list && args.all{
+        list_all_files(false);
+    }
+    else if args.undo && args.all{
+        recover_all_files(&args, &dir_path);
+    }
     else if args.list {
         if let Err(e) = list_delete_files(&args, &dir_path, &mut files, false) {
             eprintln!("Error listing or deleting files: {}", e);
@@ -73,7 +79,7 @@ fn main() {
             display_logs(Filter::Prefix(cwd));
         }
     } 
-    else if let Some(Commands::Purge { before }) = args.command{
+    else if let Some(Commands::Purge { before , confirm}) = args.command{
         let now = Local::now();
         let before_time: TimeDelta;
 
@@ -84,7 +90,7 @@ fn main() {
             before_time = Duration::days(30); // default is 30 days
         }
         let cutoff = now - before_time;
-        purge_logs(&args, cutoff);
+        purge_logs(&args, cutoff, confirm);
     }
     else {
         move_files(&args, &dir_path, &files);

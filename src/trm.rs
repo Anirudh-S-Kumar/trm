@@ -27,9 +27,16 @@ pub struct Args {
     #[arg(long)]
     pub debug: bool,
 
-    // Recover files from the trash
+    /// Recover files from the trash
     #[arg(short, long)]
     pub undo: bool,
+
+    /// All operation. 
+    /// If combined with -l, will list all files in trash
+    /// If combined with --undo, will recover all files from trash
+    #[arg(short, long)]
+    pub all: bool,
+
 
     /// Display all files trashed under given directories.
     /// Takes current directory as default if no other directory given
@@ -80,9 +87,11 @@ Example value could be `1hour 12min 5s`
     Purge {
         /// Remove items before current time - given time. Follows same semantics as in history 
         #[arg(short, long, value_parser = humantime::parse_duration)]
-        before: Option<std::time::Duration>
+        before: Option<std::time::Duration>,
 
-        //TODO: Add a confirmation option for purging
+        /// Confirm before purging
+        #[arg(short, long, default_value_t = true)]
+        confirm: bool
     }
 }
 
@@ -91,6 +100,12 @@ impl Args{
         if self.command.is_none() && !self.list && self.files.is_empty(){
             return Err("Files must be provided when not using history, or --list".to_string());
         }
+
+        // list, undo and all cannot be combined
+        if self.list && self.undo && self.all{
+            return Err("Cannot combine --list, --undo and --all. If you want to restore all files in trash, use --undo and --all".to_string());
+        }
+
         Ok(())
     }
 }
@@ -217,15 +232,9 @@ pub fn list_delete_files(
 
         *file = dir_path.join(full_path.strip_prefix("/").unwrap());
 
-        let sub_files: Vec<PathBuf> = match fs::read_dir(&file) {
-            Ok(entries) => entries
-                .filter_map(|entry| entry.ok().map(|e| e.path()))
-                .collect(),
-            Err(e) => {
-                eprintln!("Failed to read directory {}: {}", file.display(), e);
-                return Err(e);
-            }
-        };
+        let sub_files: Vec<PathBuf> = fs::read_dir(&file)?
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .collect();
 
         if return_list {
             deleted_files.push(sub_files.clone());
@@ -287,7 +296,6 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
                         full_path.display(),
                         e
                     );
-                    std::process::exit(1);
                 }
             }
         } else {
@@ -310,3 +318,28 @@ pub fn recover_files(args: &Args, dir_path: &PathBuf, files: &mut Vec<PathBuf>, 
     }
 }
 
+/// List all files in trash
+pub fn list_all_files(return_list: bool) -> Vec<PathBuf>{
+    let trash_dir = PathBuf::from(DEFAULT_DIR);
+    
+    let mut files: Vec<PathBuf> = Vec::with_capacity(1000);
+
+    for file in walkdir::WalkDir::new(trash_dir){
+        files.push(file.unwrap().path().to_path_buf());
+    }
+
+    if return_list{
+        return files;
+    } else{
+        utils::display_files(&files, false);
+    }
+
+    vec![]
+}
+
+/// Recover all files from trash
+pub fn recover_all_files(args: &Args, dir_path: &PathBuf){
+    let mut all_trash_files = list_all_files(true);
+
+    recover_files(args, dir_path, &mut all_trash_files, true);
+}

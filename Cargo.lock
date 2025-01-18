@@ -697,6 +697,7 @@ dependencies = [
  "serde_json",
  "terminal_size",
  "uutils_term_grid",
+ "walkdir",
 ]
 
 [[package]]

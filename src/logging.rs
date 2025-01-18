@@ -142,7 +142,7 @@ pub fn display_logs(filter: Filter){
 }
 
 /// Purge old files in trash and also remove corresponding entries in log
-pub fn purge_logs(args: &Args, cutoff: DateTime<Local>){
+pub fn purge_logs(args: &Args, cutoff: DateTime<Local>, confirm: bool){
     let file = match File::open(LOG_FILE){
         Ok(file ) => file,
         Err(e) => {
@@ -151,6 +151,7 @@ pub fn purge_logs(args: &Args, cutoff: DateTime<Local>){
         }
     };
 
+    let mut to_be_deleted_files: Vec<PathBuf> = vec![];
     let mut new_logs: Vec<FileInfo> = vec![];
 
     let reader = BufReader::new(file);
@@ -176,33 +177,52 @@ pub fn purge_logs(args: &Args, cutoff: DateTime<Local>){
                         continue;
                     }
 
-                    // Delete the file/directory
-                    let mut curr_parent = dst.parent().unwrap();
-                    if dst.is_dir(){
-                        if let Err(e) = fs::remove_dir_all(&dst){
-                            eprintln!("Error deleting directory {}: {}", dst.display(), e);
-                        } else if args.verbose{
-                            println!("Removed {}", dst.display());
-                        }
-                    }
-                    else{
-                        if let Err(e) = fs::remove_file(&dst){
-                            eprintln!("Error deleting file {}: {}", dst.display(), e);
-                        } else if args.verbose{
-                            println!("Removed {}", dst.display());
-                        }
-                    }
-                    while curr_parent.exists(){
-                        let new_parent = curr_parent.parent().unwrap_or_else(|| Path::new(""));
-                        if let Err(_) = fs::remove_dir(curr_parent){
-                            break;
-                        }
-                        curr_parent = new_parent;
-                    }
+                    to_be_deleted_files.push(dst);
+
                 }
             } else{
                 new_logs.push(log);
             }
+        }
+    }
+
+    if confirm{
+        let mut input = String::new();
+        for file in &to_be_deleted_files{
+            println!("{}", file.display());
+        }
+        println!("The following files will be deleted. Do you want to continue? [y/N]");
+        io::stdin().read_line(&mut input).unwrap();
+        if input.trim().to_lowercase() != "y"{
+            println!("Aborting");
+            return;
+        }
+    }
+
+    // deleting the files
+    for dst in &to_be_deleted_files{
+        // Delete the file/directory
+        let mut curr_parent = dst.parent().unwrap();
+        if dst.is_dir(){
+            if let Err(e) = fs::remove_dir_all(&dst){
+                eprintln!("Error deleting directory {}: {}", dst.display(), e);
+            } else if args.verbose{
+                println!("Removed {}", dst.display());
+            }
+        }
+        else{
+            if let Err(e) = fs::remove_file(&dst){
+                eprintln!("Error deleting file {}: {}", dst.display(), e);
+            } else if args.verbose{
+                println!("Removed {}", dst.display());
+            }
+        }
+        while curr_parent.exists(){
+            let new_parent = curr_parent.parent().unwrap_or_else(|| Path::new(""));
+            if let Err(_) = fs::remove_dir(curr_parent){
+                break;
+            }
+            curr_parent = new_parent;
         }
     }
 
