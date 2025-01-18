@@ -2,6 +2,14 @@
 
 `trm` is a temporary `rm` command that moves files to a temporary directory instead of deleting them. This is useful when you want to delete files but are not sure if you might need them later. Note that this program is not a replacement for `rm` and should not be used as such. A conscious decision has been taken to not follow the XDG Trash specification.
 
+## Installation
+
+The easiest way to install `trm` is to use `cargo`:
+
+```
+cargo install trm
+```
+
 
 ## Usage
 

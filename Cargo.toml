@@ -1,6 +1,6 @@
 [package]
 name = "trm"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["Anirudh S. Kumar <anirudh.skumar.03@gmail.com>"]
 description = "Temporary rm. A safer alternative to rm."

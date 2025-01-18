@@ -8,12 +8,12 @@ use crate::utils;
 
 
 pub fn get_default_dir() -> String {
-    let user =std::env::var("USER").unwrap();
+    let user =std::env::var("USER").unwrap_or("default".to_string());
     format!("/tmp/trm-{}", user)
 }
 
 pub fn get_log_file() -> String {
-    let user =std::env::var("USER").unwrap();
+    let user =std::env::var("USER").unwrap_or("default".to_string());
     format!("/tmp/trm-{}.log", user)
 }
 
